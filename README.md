@@ -1,1 +1,3 @@
-# 2025_machine_learning
+# 2025 machine learning
+
+> Assignments and notes
