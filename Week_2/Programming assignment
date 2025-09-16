@@ -1,0 +1,94 @@
+# Week 2 Programming Assignment: Approximate Runge Function
+# Author: 陳伯杰(Using ChatGPT)
+# Date: 2025
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import matplotlib.pyplot as plt
+import numpy as np
+
+# ===============================
+# 1. Generate training data
+# ===============================
+x_train = np.linspace(-1, 1, 100).reshape(-1,1)
+y_train = 1 / (1 + 25 * x_train**2)
+
+x_train_tensor = torch.tensor(x_train, dtype=torch.float32)
+y_train_tensor = torch.tensor(y_train, dtype=torch.float32)
+
+# ===============================
+# 2. Define the neural network
+# ===============================
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.fc1 = nn.Linear(1, 20)
+        self.fc2 = nn.Linear(20, 20)
+        self.fc3 = nn.Linear(20, 1)
+        self.activation = nn.Tanh()
+    
+    def forward(self, x):
+        x = self.activation(self.fc1(x))
+        x = self.activation(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
+net = Net()
+
+# ===============================
+# 3. Define loss function and optimizer
+# ===============================
+criterion = nn.MSELoss()
+optimizer = optim.Adam(net.parameters(), lr=0.01)
+
+# ===============================
+# 4. Train the network
+# ===============================
+num_epochs = 5000
+loss_history = []
+
+for epoch in range(num_epochs):
+    optimizer.zero_grad()
+    output = net(x_train_tensor)
+    loss = criterion(output, y_train_tensor)
+    loss.backward()
+    optimizer.step()
+    
+    if epoch % 100 == 0:
+        loss_history.append(loss.item())
+
+# ===============================
+# 5. Evaluate network and plot
+# ===============================
+x_test = np.linspace(-1, 1, 200).reshape(-1,1)
+x_test_tensor = torch.tensor(x_test, dtype=torch.float32)
+y_pred = net(x_test_tensor).detach().numpy()
+y_true = 1 / (1 + 25 * x_test**2)
+
+# Plot true function vs NN prediction
+plt.figure(figsize=(8,5))
+plt.plot(x_test, y_true, label="True f(x)")
+plt.plot(x_test, y_pred, label="NN Prediction")
+plt.xlabel("x")
+plt.ylabel("f(x)")
+plt.title("Runge Function Approximation")
+plt.legend()
+plt.show()
+
+# Plot training loss curve
+plt.figure(figsize=(8,5))
+plt.plot(np.arange(0, num_epochs, 100), loss_history)
+plt.xlabel("Epoch")
+plt.ylabel("Training Loss (MSE)")
+plt.title("Training Loss Curve")
+plt.show()
+
+# ===============================
+# 6. Calculate errors
+# ===============================
+mse_error = np.mean((y_pred - y_true)**2)
+max_error = np.max(np.abs(y_pred - y_true))
+
+print("MSE:", mse_error)
+print("Max Error:", max_error)
