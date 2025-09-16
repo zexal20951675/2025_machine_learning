@@ -55,7 +55,7 @@ for epoch in range(num_epochs):
     loss.backward()
     optimizer.step()
     
-    if epoch % 100 == 0:
+    if epoch % 5 == 0:
         loss_history.append(loss.item())
 
 # ===============================
@@ -78,7 +78,7 @@ plt.show()
 
 # Plot training loss curve
 plt.figure(figsize=(8,5))
-plt.plot(np.arange(0, num_epochs, 100), loss_history)
+plt.plot(np.arange(0, num_epochs, 5), loss_history)
 plt.xlabel("Epoch")
 plt.ylabel("Training Loss (MSE)")
 plt.title("Training Loss Curve")
