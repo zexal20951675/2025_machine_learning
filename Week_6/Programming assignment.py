@@ -142,3 +142,124 @@ plt.savefig("/content/GDA_decision_boundary.png", dpi=300)
 plt.show()
 
 print("Saved visualization to /content/GDA_decision_boundary.png")
+
+# ======================
+
+import pandas as pd
+
+# 讀取分類與回歸資料集
+df_class = pd.read_csv("/content/classification_3x3.csv")
+df_reg = pd.read_csv("/content/regression_3x3.csv")
+
+print("Classification dataset:", df_class.shape)
+print("Regression dataset:", df_reg.shape)
+print("\nClassification columns:", df_class.columns.tolist())
+print("Regression columns:", df_reg.columns.tolist())
+
+# 檢查是否有對應經緯度
+print("\nExample (classification):")
+print(df_class.head(3)[["lon", "lat", "label"]])
+
+print("\nExample (regression):")
+print(df_reg.head(3)[["lon", "lat", "label"]])
+
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+# ======================
+# 1. 讀取特徵與標籤
+# ======================
+X_class = df_class.drop(columns=["label"]).replace(-999.0, np.nan).fillna(0)
+y_class = df_class["label"]
+
+X_reg = df_reg.drop(columns=["label"]).replace(-999.0, np.nan).fillna(0)
+y_reg = df_reg["label"]
+
+# ======================
+# 2. 重建分類模型（GDA）
+# ======================
+def fit_gda(X, y):
+    n, d = X.shape
+    y = y.astype(int)
+    phi = y.mean()
+    X1 = X[y == 1]
+    X0 = X[y == 0]
+    mu1 = X1.mean(axis=0)
+    mu0 = X0.mean(axis=0)
+    Sigma = ((X1 - mu1).T @ (X1 - mu1) + (X0 - mu0).T @ (X0 - mu0)) / n
+    Sigma += np.eye(d) * 1e-6
+    return {"phi": phi, "mu0": mu0, "mu1": mu1, "Sigma": Sigma, "Sigma_inv": np.linalg.inv(Sigma)}
+
+def predict_gda(model, X):
+    phi, mu0, mu1, Sigma_inv = model["phi"], model["mu0"], model["mu1"], model["Sigma_inv"]
+    logp1 = -0.5 * np.sum((X - mu1) @ Sigma_inv * (X - mu1), axis=1) + np.log(phi + 1e-12)
+    logp0 = -0.5 * np.sum((X - mu0) @ Sigma_inv * (X - mu0), axis=1) + np.log(1 - phi + 1e-12)
+    return (logp1 > logp0).astype(int)
+
+gda_model = fit_gda(X_class.values, y_class.values)
+
+# ======================
+# 3. 重建回歸模型（Linear Regression）
+# ======================
+reg_model = LinearRegression().fit(X_reg.values, y_reg.values)
+
+# ======================
+# Step 3: piecewise model
+# ======================
+
+# 使用分類器預測每個格點是否有效
+y_pred_class = predict_gda(gda_model, X_class.values)
+
+# 使用回歸模型預測溫度（僅針對有效格點）
+y_pred_reg = reg_model.predict(X_class.values)
+
+# 構建分段函數輸出
+h_pred = np.where(y_pred_class == 1, y_pred_reg, -999)
+
+# ======================
+# 結果檢查
+# ======================
+print("h(x) results sample:")
+df_out = df_class[["lon", "lat"]].copy()
+df_out["C(x)"] = y_pred_class
+df_out["R(x)"] = y_pred_reg
+df_out["h(x)"] = h_pred
+
+print(df_out.head(10))
+
+# 統計
+valid_points = np.sum(df_out["h(x)"] != -999)
+invalid_points = np.sum(df_out["h(x)"] == -999)
+
+print(f"\nTotal points: {len(df_out)}")
+print(f"Valid predictions (C=1): {valid_points}")
+print(f"Invalid predictions (C=0 → -999): {invalid_points}")
+
+mport matplotlib.pyplot as plt
+import numpy as np
+
+# 將經緯度與 h(x) 組成格點矩陣
+lon_vals = np.sort(df_out["lon"].unique())
+lat_vals = np.sort(df_out["lat"].unique())
+
+# pivot 成 2D grid
+pivot = df_out.pivot(index="lat", columns="lon", values="h(x)").values
+
+plt.figure(figsize=(8, 6))
+im = plt.imshow(
+    pivot,
+    origin="lower",
+    extent=[lon_vals.min(), lon_vals.max(), lat_vals.min(), lat_vals.max()],
+    cmap="coolwarm",
+)
+plt.colorbar(im, label="Predicted temperature (°C or -999)")
+plt.title("Piecewise Model Output h(x): Temperature Field with Invalid Points")
+plt.xlabel("Longitude (°E)")
+plt.ylabel("Latitude (°N)")
+plt.tight_layout()
+plt.savefig("/content/Fig_hx_map.png", dpi=300)
+plt.show()
+
+print("✅ Saved to /content/Fig_hx_map.png")
+
+
